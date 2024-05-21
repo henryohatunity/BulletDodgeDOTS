@@ -1,7 +1,11 @@
+using Mono.Cecil;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
+using Unity.Mathematics;
 using Unity.Transforms;
+using UnityEngine;
+using UnityEngine.UI;
 
 [BurstCompile]
 [UpdateAfter(typeof(BulletSpawnSystem))]
@@ -10,6 +14,7 @@ public partial struct BulletMoveSystem : ISystem
     public void OnCreate(ref SystemState state)
     {
         state.RequireForUpdate<Bullet>();
+        // state.Enabled = false;
     }
 
     [BurstCompile]
@@ -25,21 +30,16 @@ public partial struct BulletMoveSystem : ISystem
         
         
         // Job
+        var query = SystemAPI.QueryBuilder().WithAll<Bullet, LocalTransform>().Build();
+        var allBulletTransforms = query.ToComponentDataArray<LocalTransform>(state.WorldUpdateAllocator);
+        var allBulletEntities = query.ToEntityArray(state.WorldUpdateAllocator);
+        var deltaTime = SystemAPI.Time.DeltaTime;
         
-        
-        
-        
-        
-        
-        // var query = SystemAPI.QueryBuilder().WithAll<Bullet, LocalTransform>().Build();
-        
-
-
-
         var job = new BulletMoveJob
         {
-            // allBulletTransforms =
-            deltaTime = SystemAPI.Time.DeltaTime
+            allTransforms = allBulletTransforms,
+            allEntities = allBulletEntities,
+            DeltaTime = deltaTime
         };
         job.ScheduleParallel();
     }
@@ -49,16 +49,45 @@ public partial struct BulletMoveSystem : ISystem
     [BurstCompile]
     public partial struct BulletMoveJob : IJobEntity
     {
-        private const float reflectDistance = 0.1f;
-        private const float reflectDistancesqr = reflectDistance * reflectDistance;
+        private const float ReflectDistance = 1.0f;
+        private const float ReflectDistanceSqr = ReflectDistance * ReflectDistance;
 
-        // public NativeArray<LocalTransform> allBulletTransforms;
-        // public NativeArray<Entity> allBullets;
-        public float deltaTime;
+        [ReadOnly] public NativeArray<LocalTransform> allTransforms;
+        [ReadOnly] public NativeArray<Entity> allEntities;
+        public float DeltaTime;
 
-        public void Execute(ref LocalTransform bulletTransform, ref Movement bulletMovement)
+        public void Execute(Entity bulletEntity, ref BulletLife bulletLife, ref LocalTransform bulletTransform, ref Movement bulletMovement)
         {
-            var newPosition = bulletTransform.Position + bulletMovement.Velocity * deltaTime;
+            var velocity = bulletMovement.Velocity;
+            var newPosition = bulletTransform.Position + velocity * DeltaTime;
+
+            for (var i = 0; i < allEntities.Length; i++)
+            {
+                var otherBulletTransform = allTransforms[i];
+                if (bulletEntity == allEntities[i])
+                {
+                    continue;
+                }
+
+                var dis = math.distancesq(newPosition, otherBulletTransform.Position);
+                if (dis > ReflectDistanceSqr)
+                {
+                    continue;
+                }
+                
+                // Collision!
+                var collisionSurfaceNormal = math.normalize(otherBulletTransform.Position - newPosition);
+                velocity = math.reflect(velocity, collisionSurfaceNormal);
+                newPosition = bulletTransform.Position + velocity * DeltaTime;
+                bulletMovement.Velocity = velocity;
+
+                var newLife = bulletLife.life - 1;
+                bulletLife.life = math.max(0, newLife);
+                // Debug.Log($"Hit! Entity Index:{bulletEntity.Index}, dis:{dis}, life:{bulletLife.life}");
+                
+                break;
+            }
+
             bulletTransform.Position = newPosition;
         }
     }

@@ -15,6 +15,8 @@ public class BulletSpawnerAuthoring : MonoBehaviour
     public float bulletSpeedMin = 1.0f;
     public float bulletSpeedMax = 10.0f;
 
+    public GameObject cubePrefab;   // test
+
     private class BulletSpawnerBaker : Baker<BulletSpawnerAuthoring>
     {
         public override void Bake(BulletSpawnerAuthoring authoring)
@@ -30,7 +32,9 @@ public class BulletSpawnerAuthoring : MonoBehaviour
                 spawnRadius = authoring.spawnRadius,
                 bulletSpeedMin = authoring.bulletSpeedMin,
                 bulletSpeedMax = authoring.bulletSpeedMax,
-                nextSpawnTime = 0
+                nextSpawnTime = 0,
+                
+                cubePrefab = GetEntity(authoring.cubePrefab, TransformUsageFlags.Dynamic),
             });
         }
     }
@@ -47,4 +51,6 @@ public struct BulletSpawner : IComponentData
     public float nextSpawnTime;
     public float bulletSpeedMin;
     public float bulletSpeedMax;
+
+    public Entity cubePrefab;
 }
